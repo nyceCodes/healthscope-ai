@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import Float
@@ -5,6 +7,7 @@ from sqlalchemy import String
 from sqlalchemy import DateTime
 
 from app.database.database import Base
+
 
 class CountrySnapshot(Base):
 
@@ -22,6 +25,17 @@ class CountrySnapshot(Base):
 
     recovered = Column(Integer)
 
-    risk_score = Column(Float)
+    active = Column(Integer)
 
-    created_at = Column(DateTime)
+    tests = Column(Integer)
+
+    recovery_rate = Column(Float)
+
+    mortality_rate = Column(Float)
+
+    health_index = Column(Float)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
