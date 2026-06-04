@@ -1,10 +1,9 @@
+import Dashboard from "./pages/Dashboard";
+
 function App() {
-  return (
-    <div>
-      <h1>HealthScope AI</h1>
-      <p>Healthcare Intelligence Platform</p>
-    </div>
-  )
+
+  return <Dashboard />;
+
 }
 
-export default App
+export default App;
