@@ -9,6 +9,10 @@ from app.services.analytics_service import AnalyticsService
 from app.services.health_profile_service import HealthProfileService
 from app.services.snapshot_service import SnapshotService
 
+from app.services.ranking_service import RankingService
+
+from fastapi import Query
+
 router = APIRouter()
 
 @router.get(
@@ -89,3 +93,64 @@ def country_history(
         }
         for snapshot in history
     ]
+
+@router.get("/rankings")
+def rankings(
+    db: Session = Depends(get_db)
+):
+
+    return RankingService.get_rankings(db)
+
+@router.get("/compare")
+def compare_countries(
+    countries: list[str] = Query(...),
+):
+
+    results = []
+
+    for country in countries:
+
+        profile = (
+            HealthProfileService
+            .build_profile(country)
+        )
+
+        profile["health_index"] = (
+            AnalyticsService
+            .health_index(profile)
+        )
+
+        results.append(profile)
+
+    return results
+
+
+@router.get("/trends/{country}")
+def country_trends(
+    country: str,
+    db: Session = Depends(get_db)
+):
+    history = (
+
+    db.query(CountrySnapshot)
+
+    .filter(
+        CountrySnapshot.country == country
+    )
+
+    .order_by(
+        CountrySnapshot.created_at.asc()
+    )
+
+    .all()
+
+)
+    return [
+    {
+        "date": item.created_at,
+        "health_index": item.health_index,
+        "recovery_rate": item.recovery_rate,
+        "mortality_rate": item.mortality_rate
+    }
+    for item in history
+]
