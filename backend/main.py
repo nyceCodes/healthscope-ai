@@ -10,3 +10,13 @@ def root():
     return {
         "message": "HealthScope AI API Running"
     }
+
+from app.api.health_profile_routes import (
+    router as health_profile_router
+)
+
+app.include_router(
+    health_profile_router,
+    prefix="/health",
+    tags=["Health Profile"]
+)
