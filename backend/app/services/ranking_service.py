@@ -1,5 +1,7 @@
 from app.models.country_snapshot import CountrySnapshot
-
+from app.models.life_expectancy import (
+    LifeExpectancy
+)
 
 class RankingService:
 
@@ -26,3 +28,31 @@ class RankingService:
             }
             for s in snapshots
         ]
+        
+
+    @staticmethod
+    def top_life_expectancy(
+        db,
+        limit=10
+    ):
+
+        return (
+
+            db.query(
+                LifeExpectancy
+            )
+
+            .filter(
+                LifeExpectancy.year == 2015
+            )
+
+            .order_by(
+                LifeExpectancy.life_expectancy.desc()
+            )
+
+            .limit(limit)
+
+            .all()
+
+        )
+    

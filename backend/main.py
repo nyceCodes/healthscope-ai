@@ -7,6 +7,10 @@ from app.database.database import engine
 from app.models.country_snapshot import CountrySnapshot
 from app.models.nutrition_search import NutritionSearch
 
+from app.models.life_expectancy import (
+    LifeExpectancy
+)
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
