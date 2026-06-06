@@ -41,6 +41,10 @@ from app.services.risk_assessment_service import (
     RiskAssessmentService
 )
 
+from app.services.prediction_history_service import (
+    PredictionHistoryService
+)
+
 
 router = APIRouter()
 
@@ -500,7 +504,8 @@ def risk_assessment(
     "/predict-life-expectancy"
 )
 def predict_life_expectancy(
-    request: LifePredictionRequest
+    request: LifePredictionRequest,
+    db: Session = Depends(get_db)
 ):
 
     prediction = (
@@ -514,7 +519,69 @@ def predict_life_expectancy(
         )
     )
 
+    PredictionHistoryService.save_prediction(
+
+        db,
+
+        request.adult_mortality,
+
+        request.bmi,
+
+        request.gdp,
+
+        request.schooling,
+
+        request.population,
+
+        prediction
+
+    )
+
     return {
         "predicted_life_expectancy":
             prediction
     }
+
+@router.get(
+    "/predictions"
+)
+def prediction_history(
+    db: Session = Depends(get_db)
+):
+
+    predictions = (
+        PredictionHistoryService
+        .get_predictions(db)
+    )
+
+    return [
+
+        {
+            "id":
+                p.id,
+
+            "adult_mortality":
+                p.adult_mortality,
+
+            "bmi":
+                p.bmi,
+
+            "gdp":
+                p.gdp,
+
+            "schooling":
+                p.schooling,
+
+            "population":
+                p.population,
+
+            "prediction":
+                p.prediction,
+
+            "created_at":
+                p.created_at
+        }
+
+        for p in predictions
+
+    ]

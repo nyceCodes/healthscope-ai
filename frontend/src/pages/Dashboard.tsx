@@ -6,7 +6,8 @@ import {
     getRankings,
     getRiskAssessment,
     getCountryReport,
-    predictLifeExpectancy
+    predictLifeExpectancy,
+    getPredictionHistory
 } from "../services/healthApi";
 
 import type { HealthProfile }
@@ -24,9 +25,13 @@ from "../types/RiskAssessment";
 import type { CountryReport }
 from "../types/CountryReport";
 
+import type { PredictionHistory }
+from "../types/PredictionHistory";
+
 import TrendChart from "../components/TrendChart";
 
 import "../styles/dashboard.css";
+
 
 function Dashboard() {
 
@@ -58,6 +63,9 @@ function Dashboard() {
         useState<number | null>(
             null
         );
+
+        const [predictionHistory, setPredictionHistory] =
+    useState<PredictionHistory[]>([]);
 
     const [predictionForm, setPredictionForm] =
         useState({
@@ -119,6 +127,13 @@ function Dashboard() {
                 .predicted_life_expectancy
         );
 
+        const historyResponse =
+            await getPredictionHistory();
+
+        setPredictionHistory(
+            historyResponse.data
+        );
+
     };
 
     useEffect(() => {
@@ -126,6 +141,13 @@ function Dashboard() {
         getRankings()
             .then((res) =>
                 setRankings(
+                    res.data
+                )
+            );
+
+        getPredictionHistory()
+            .then((res) =>
+                setPredictionHistory(
                     res.data
                 )
             );
@@ -391,120 +413,112 @@ function Dashboard() {
                     )}
 
                     {countryReport && (
-
+                    
+                    <>
+                    
                         <div className="prediction-card">
 
                             <h2>
                                 Life Expectancy Predictor
                             </h2>
 
-                            <div className="prediction-fields">
+                            <div className="prediction-grid">
 
-                                <label>
-                                    Adult Mortality
-                                    <input
-                                        type="number"
-                                        value={predictionForm.adult_mortality}
-                                        onChange={(e) =>
-                                            setPredictionForm({
-                                                ...predictionForm,
-                                                adult_mortality:
-                                                    Number(
-                                                        e.target.value
-                                                    )
-                                            })
-                                        }
-                                    />
-                                </label>
+                                <input
+                                    type="number"
+                                    value={predictionForm.adult_mortality}
+                                    onChange={(e) =>
+                                        setPredictionForm({
+                                            ...predictionForm,
+                                            adult_mortality:
+                                                Number(
+                                                    e.target.value
+                                                )
+                                        })
+                                    }
+                                    placeholder="Adult Mortality"
+                                />
 
-                                <label>
-                                    BMI
-                                    <input
-                                        type="number"
-                                        value={predictionForm.bmi}
-                                        onChange={(e) =>
-                                            setPredictionForm({
-                                                ...predictionForm,
-                                                bmi:
-                                                    Number(
-                                                        e.target.value
-                                                    )
-                                            })
-                                        }
-                                    />
-                                </label>
+                                <input
+                                    type="number"
+                                    value={predictionForm.bmi}
+                                    onChange={(e) =>
+                                        setPredictionForm({
+                                            ...predictionForm,
+                                            bmi:
+                                                Number(
+                                                    e.target.value
+                                                )
+                                        })
+                                    }
+                                    placeholder="BMI"
+                                />
 
-                                <label>
-                                    GDP
-                                    <input
-                                        type="number"
-                                        value={predictionForm.gdp}
-                                        onChange={(e) =>
-                                            setPredictionForm({
-                                                ...predictionForm,
-                                                gdp:
-                                                    Number(
-                                                        e.target.value
-                                                    )
-                                            })
-                                        }
-                                    />
-                                </label>
+                                <input
+                                    type="number"
+                                    value={predictionForm.gdp}
+                                    onChange={(e) =>
+                                        setPredictionForm({
+                                            ...predictionForm,
+                                            gdp:
+                                                Number(
+                                                    e.target.value
+                                                )
+                                        })
+                                    }
+                                    placeholder="GDP"
+                                />
 
-                                <label>
-                                    Schooling
-                                    <input
-                                        type="number"
-                                        value={predictionForm.schooling}
-                                        onChange={(e) =>
-                                            setPredictionForm({
-                                                ...predictionForm,
-                                                schooling:
-                                                    Number(
-                                                        e.target.value
-                                                    )
-                                            })
-                                        }
-                                    />
-                                </label>
+                                <input
+                                    type="number"
+                                    value={predictionForm.schooling}
+                                    onChange={(e) =>
+                                        setPredictionForm({
+                                            ...predictionForm,
+                                            schooling:
+                                                Number(
+                                                    e.target.value
+                                                )
+                                        })
+                                    }
+                                    placeholder="Schooling"
+                                />
 
-                                <label>
-                                    Population
-                                    <input
-                                        type="number"
-                                        value={predictionForm.population}
-                                        onChange={(e) =>
-                                            setPredictionForm({
-                                                ...predictionForm,
-                                                population:
-                                                    Number(
-                                                        e.target.value
-                                                    )
-                                            })
-                                        }
-                                    />
-                                </label>
+                                <input
+                                    type="number"
+                                    value={predictionForm.population}
+                                    onChange={(e) =>
+                                        setPredictionForm({
+                                            ...predictionForm,
+                                            population:
+                                                Number(
+                                                    e.target.value
+                                                )
+                                        })
+                                    }
+                                    placeholder="Population"
+                                />
 
                             </div>
 
                             <button
-                                type="button"
+                                className="predict-btn"
                                 onClick={runPrediction}
                             >
                                 Predict
                             </button>
 
-                            {prediction && (
+                            {prediction !== null && (
 
                                 <div className="prediction-result">
 
-                                    <strong>
-                                        Predicted Life Expectancy:
-                                    </strong>
-                                    {" "}
-                                    {prediction}
-                                    {" "}
-                                    years
+                                    <h3>
+                                        Predicted Life Expectancy
+                                    </h3>
+
+                                    <p>
+                                        {prediction} years
+                                    </p>
 
                                 </div>
 
@@ -512,8 +526,41 @@ function Dashboard() {
 
                         </div>
 
-                    )}
+                        {predictionHistory.length > 0 && (
 
+                            <div className="prediction-history-card">
+
+                                <h2>
+                                    Prediction History
+                                </h2>
+
+                                {predictionHistory
+                                    .slice(0, 10)
+                                    .map((item) => (
+
+                                        <div
+                                            key={item.id}
+                                            className="history-row"
+                                        >
+
+                                            <strong>
+                                                {item.prediction}
+                                            </strong>
+
+                                            {" "}
+                                            years
+
+                                        </div>
+
+                                    ))}
+
+                            </div>
+
+                        )}
+
+                    </>
+
+                )}
                     {trendData.length > 0 && (
 
                         <div className="trend-chart">

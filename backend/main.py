@@ -11,6 +11,10 @@ from app.models.life_expectancy import (
     LifeExpectancy
 )
 
+from app.models.prediction_history import (
+    PredictionHistory
+)
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

@@ -63,4 +63,10 @@ export const predictLifeExpectancy = (
 
 };
 
+export const getPredictionHistory = () => {
 
+    return API.get(
+        "/health/predictions"
+    );
+
+};
