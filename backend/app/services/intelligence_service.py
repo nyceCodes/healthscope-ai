@@ -23,7 +23,7 @@ class IntelligenceService:
             ["schooling"]
         )
 
-        if schooling < 13:
+        if schooling is not None and schooling < 13:
 
             insights.append(
                 "Education levels may be limiting long-term health outcomes."

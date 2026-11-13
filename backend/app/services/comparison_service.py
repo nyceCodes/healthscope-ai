@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.life_expectancy import (
@@ -13,11 +14,13 @@ class ComparisonService:
         country_a: str,
         country_b: str
     ):
+        a_key = country_a.strip().casefold()
+        b_key = country_b.strip().casefold()
 
         a = (
             db.query(LifeExpectancy)
             .filter(
-                LifeExpectancy.country == country_a
+                func.lower(LifeExpectancy.country) == a_key
             )
             .order_by(
                 LifeExpectancy.year.desc()
@@ -28,7 +31,7 @@ class ComparisonService:
         b = (
             db.query(LifeExpectancy)
             .filter(
-                LifeExpectancy.country == country_b
+                func.lower(LifeExpectancy.country) == b_key
             )
             .order_by(
                 LifeExpectancy.year.desc()

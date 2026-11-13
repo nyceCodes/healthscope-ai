@@ -1,3 +1,4 @@
+from pathlib import Path
 import joblib
 import pandas as pd
 
@@ -5,7 +6,7 @@ import pandas as pd
 class MLService:
 
     model = joblib.load(
-        "saved_models/life_expectancy_model.pkl"
+        Path(__file__).resolve().parents[2] / "saved_models" / "life_expectancy_model.pkl"
     )
 
     @staticmethod

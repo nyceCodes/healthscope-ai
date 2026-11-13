@@ -1,5 +1,9 @@
+import logging
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -46,7 +50,43 @@ from app.services.prediction_history_service import (
 )
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def snapshot_profile(snapshot):
+    """Use stored observations without presenting them as fresh API data."""
+    return {
+        "country": snapshot.country,
+        "population": snapshot.population or 0,
+        "region": "",
+        "capital": "",
+        "cases": snapshot.cases or 0,
+        "deaths": snapshot.deaths or 0,
+        "recovered": snapshot.recovered or 0,
+        "active": snapshot.active or 0,
+        "tests": snapshot.tests or 0,
+        "recovery_rate": snapshot.recovery_rate or 0,
+        "mortality_rate": snapshot.mortality_rate or 0,
+        "health_index": AnalyticsService.index_from_snapshot(snapshot),
+        "data_source": "saved country snapshot",
+        "data_as_of": snapshot.created_at,
+        "data_status": "Historical cached data — external source unavailable",
+    }
+
+
+def normalize_country_name(country: str) -> str:
+    return country.strip().casefold()
+
+
+def latest_snapshot(db, country):
+    country_key = normalize_country_name(country)
+    return db.query(CountrySnapshot).filter(
+        func.lower(CountrySnapshot.country) == country_key
+    ).order_by(
+        CountrySnapshot.created_at.desc(), CountrySnapshot.id.desc()
+    ).first()
+
 
 @router.get(
     "/profile/{country}",
@@ -56,41 +96,38 @@ def country_profile(
     country: str,
     db: Session = Depends(get_db)
 ):
+    country = country.strip()
+    if not country:
+        raise HTTPException(status_code=422, detail="Country name is required")
     try:
-        profile = HealthProfileService.build_profile(
-            country
-        )
-    
-        profile["recovery_rate"] = (
-            AnalyticsService.recovery_rate(profile)
-        )
+        profile = HealthProfileService.build_profile(country)
+        if profile is None:
+            cached = latest_snapshot(db, country)
+            if cached is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="No saved health profile for this country and the external COVID-19 data provider is unavailable. Try a country with saved snapshots or retry later.",
+                )
+            return snapshot_profile(cached)
 
-        profile["mortality_rate"] = (
-            AnalyticsService.mortality_rate(profile)
-        )
-
-        profile["health_index"] = (
-            AnalyticsService.health_index(profile)
-        )
-
-        SnapshotService.save_snapshot(
-            db,
-            profile
-        )
-
+        profile["recovery_rate"] = AnalyticsService.recovery_rate(profile)
+        profile["mortality_rate"] = AnalyticsService.mortality_rate(profile)
+        profile["health_index"] = AnalyticsService.health_index(profile)
+        # Do not insert duplicate records merely because a user refreshed the page.
+        previous = latest_snapshot(db, profile["country"])
+        metrics = ("population", "cases", "deaths", "recovered", "active", "tests")
+        if previous is None or any(getattr(previous, name) != profile[name] for name in metrics):
+            SnapshotService.save_snapshot(db, profile)
+        profile["data_as_of"] = datetime.utcnow()
         return profile
-    
-    except ValueError as e:
-        raise HTTPException(
-            status_code=404,
-            detail=str(e)
-    )
-
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-    )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to generate country health profile for %s", country)
+        raise HTTPException(status_code=500, detail="Could not process the country profile") from exc
 
 
 @router.get("/history/{country}")
@@ -98,10 +135,11 @@ def country_history(
     country: str,
     db: Session = Depends(get_db)
 ):
+    country_key = normalize_country_name(country)
     history = (
         db.query(CountrySnapshot)
         .filter(
-            CountrySnapshot.country == country
+            func.lower(CountrySnapshot.country) == country_key
         )
         .order_by(
             CountrySnapshot.created_at.desc()
@@ -135,7 +173,7 @@ def rankings(
     return RankingService.get_rankings(db)
 
 @router.get("/compare")
-def compare_countries(
+def compare_live_countries(
     countries: list[str] = Query(...),
 ):
 
@@ -148,10 +186,12 @@ def compare_countries(
             .build_profile(country)
         )
 
-        profile["health_index"] = (
-            AnalyticsService
-            .health_index(profile)
-        )
+        if profile is None:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Live COVID-19 data unavailable for {country}",
+            )
+        profile["health_index"] = AnalyticsService.health_index(profile)
 
         results.append(profile)
 
@@ -163,25 +203,21 @@ def country_trends(
     country: str,
     db: Session = Depends(get_db)
 ):
+    country_key = normalize_country_name(country)
     history = (
-
-    db.query(CountrySnapshot)
-
-    .filter(
-        CountrySnapshot.country == country
+        db.query(CountrySnapshot)
+        .filter(
+            func.lower(CountrySnapshot.country) == country_key
+        )
+        .order_by(
+            CountrySnapshot.created_at.asc()
+        )
+        .all()
     )
-
-    .order_by(
-        CountrySnapshot.created_at.asc()
-    )
-
-    .all()
-
-)
     return [
     {
         "date": item.created_at,
-        "health_index": item.health_index,
+        "health_index": AnalyticsService.index_from_snapshot(item),
         "recovery_rate": item.recovery_rate,
         "mortality_rate": item.mortality_rate
     }
@@ -195,7 +231,7 @@ def life_expectancy(
     country: str,
     db: Session = Depends(get_db)
 ):
-
+    country = country.strip()
     record = (
         LifeExpectancyService
         .latest_country_record(
@@ -356,7 +392,7 @@ def country_report(
         "health_profile": {
 
             "health_index":
-                snapshot.health_index
+                AnalyticsService.index_from_snapshot(snapshot)
                 if snapshot
                 else None,
 
@@ -471,7 +507,7 @@ def risk_assessment(
         "health_profile": {
 
             "health_index":
-                snapshot.health_index
+                AnalyticsService.index_from_snapshot(snapshot)
                 if snapshot
                 else None
         },

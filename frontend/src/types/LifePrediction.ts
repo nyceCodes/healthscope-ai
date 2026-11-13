@@ -5,3 +5,7 @@ export interface LifePredictionRequest {
     schooling: number;
     population: number;
 }
+
+export interface LifePredictionResponse {
+    predicted_life_expectancy: number;
+}

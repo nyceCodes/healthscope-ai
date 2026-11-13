@@ -22,4 +22,8 @@ export interface HealthProfile {
   mortality_rate: number;
 
   health_index: number;
+
+  data_source: string;
+  data_status: string;
+  data_as_of: string | null;
 }

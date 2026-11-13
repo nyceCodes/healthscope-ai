@@ -23,7 +23,7 @@ class RiskAssessmentService:
             report["life_expectancy"]["schooling"]
         )
 
-        if life_expectancy < 75:
+        if life_expectancy is not None and life_expectancy < 75:
             score += 1
 
             reasons.append(
@@ -46,7 +46,7 @@ class RiskAssessmentService:
                 "Increase public health investment."
             )
 
-        if schooling < 13:
+        if schooling is not None and schooling < 13:
 
             score += 1
 

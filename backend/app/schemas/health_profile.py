@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 class HealthProfile(BaseModel):
@@ -25,3 +26,7 @@ class HealthProfile(BaseModel):
     mortality_rate: float
 
     health_index: float
+    # Source metadata allows the UI to distinguish stored versus live-retrieved data.
+    data_source: str = "unknown"
+    data_as_of: datetime | None = None
+    data_status: str = ""

@@ -1,0 +1,158 @@
+.predictive-analytics {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px 32px 64px;
+  color: #f3f4f6;
+  text-align: left;
+}
+
+.predictive-header {
+  margin-bottom: 24px;
+}
+
+.predictive-header h1 {
+  margin: 0 0 8px;
+}
+
+.prediction-card,
+.model-info-card,
+.prediction-history-card {
+  margin-top: 20px;
+  padding: 24px;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.prediction-card h2,
+.model-info-card h2,
+.prediction-history-card h2 {
+  color: #f8fafc;
+}
+
+.prediction-disclaimer,
+.history-privacy-note {
+  margin: 10px 0 18px;
+  color: #cbd5e1;
+}
+
+.prediction-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.prediction-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.prediction-field label {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.prediction-field label span,
+.prediction-field small {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.prediction-field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #64748b;
+  border-radius: 7px;
+  color: #f8fafc;
+  background: #1f2937;
+  font: inherit;
+}
+
+.prediction-field small {
+  line-height: 1.4;
+}
+
+.predictive-analytics .predict-btn {
+  min-height: 44px;
+}
+
+.prediction-result {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #1f2937;
+}
+
+.prediction-result h3,
+.model-info-card h3 {
+  margin: 0 0 8px;
+  color: #f8fafc;
+}
+
+.prediction-result p {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.model-info-card > p {
+  margin: 10px 0;
+  line-height: 1.6;
+  color: #cbd5e1;
+}
+
+.model-info-card h3 {
+  margin-top: 20px;
+}
+
+.model-feature-list {
+  display: grid;
+  gap: 8px;
+  padding-left: 22px;
+  color: #cbd5e1;
+}
+
+.model-feature-list strong {
+  color: #f8fafc;
+}
+
+.prediction-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prediction-history-list .history-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.prediction-history-list time {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.predictive-analytics :focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+}
+
+@media (max-width: 650px) {
+  .predictive-analytics {
+    padding: 20px 16px 40px;
+  }
+
+  .prediction-card,
+  .model-info-card,
+  .prediction-history-card {
+    padding: 18px;
+  }
+}

@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.life_expectancy import (
@@ -16,41 +17,32 @@ class CountryReportService:
         db: Session,
         country: str
     ):
+        country_key = country.strip().casefold()
 
         latest_snapshot = (
-
             db.query(
                 CountrySnapshot
             )
-
             .filter(
-                CountrySnapshot.country == country
+                func.lower(CountrySnapshot.country) == country_key
             )
-
             .order_by(
                 CountrySnapshot.created_at.desc()
             )
-
             .first()
-
         )
 
         life_record = (
-
             db.query(
                 LifeExpectancy
             )
-
             .filter(
-                LifeExpectancy.country == country
+                func.lower(LifeExpectancy.country) == country_key
             )
-
             .order_by(
                 LifeExpectancy.year.desc()
             )
-
             .first()
-
         )
 
         top_country = (
