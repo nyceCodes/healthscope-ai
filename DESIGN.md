@@ -39,7 +39,13 @@ While a request is pending, the action is disabled and a status is announced. A 
 
 The model panel identifies the retained 100-tree Random Forest and its historical country-year target coverage (2000–2015), describes every input and unit, and states that estimates are experimental and not clinical advice. It does not show a performance score: the training script prints holdout MAE but does not store it, and the current database has no BMI values for a valid metric reproduction.
 
-The prediction-history notice explains that records belong to the shared deployment database, not an authenticated user. Do not send personally identifying information; public deployment requires authentication or a deliberate history policy.
+Prediction history is enabled by default only for local development and can be disabled with `HEALTHSCOPE_PREDICTION_HISTORY_ENABLED=false`. In production, history reads return 404 and anonymous predictions are computed without storing their inputs, even if the setting is true. Existing local rows are left intact; deploy a production database without local user-generated history. Anonymous prediction results remain available.
+
+## Phase 5B deployment behavior
+
+The React/Vite app remains a static single-page application. Its API origin is supplied through `VITE_API_BASE_URL` at build time; only development builds use the localhost fallback. Vercel's configured SPA rewrite serves the app shell for direct navigation and refresh on client-side routes. The existing map GeoJSON stays under `frontend/public/data`, and page/chart lazy loading is unchanged.
+
+Production API startup uses an explicitly configured SQLite file and rejects a database that contains prediction-history rows. The separate seed builder preserves public reference observations without modifying the source database. `GET /health` returns a minimal readiness result after checking database connectivity; API debug mode is disabled.
 
 ## Phase 4 responsiveness and accessibility
 

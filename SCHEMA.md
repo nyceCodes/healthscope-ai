@@ -53,6 +53,14 @@ The existing country observation response remains the country-profile history co
 
 `POST /health/predict-life-expectancy` retains the existing JSON feature keys: `adult_mortality`, `bmi`, `gdp`, `schooling`, and `population`. Values must be finite; adult mortality, GDP, and schooling are non-negative, while BMI and population are positive. Invalid values return HTTP 422 with location, message, and validation type only; submitted values are not copied into the error body.
 
-The success response remains `{"predicted_life_expectancy": number}`. `GET /health/predictions` continues to return records from the existing `prediction_history` table, including model inputs, prediction, and creation timestamp. This history is shared across the API deployment and has no user ownership/authentication in the current schema; do not expose it publicly as user-specific data.
+The success response remains `{"predicted_life_expectancy": number}`. Local development can read/write the existing `prediction_history` table. In production, the same anonymous prediction route returns a result without persisting inputs, and `GET /health/predictions` returns 404. Production startup rejects a database containing prediction-history records. No schema migration is required.
 
 No evaluation metrics are persisted with the model artifact. The current WHO table contains 2,938 records from 2000–2015 but has null BMI in every row, so its original complete training split and holdout score are not reproducible from this database. The application reports no MAE/RMSE/R² rather than deriving a misleading score.
+
+## Phase 5B production SQLite seed
+
+`python -m scripts.create_production_seed --output deployment/healthscope.db` creates a separate copy of the local database. The source is opened read-only and is never overwritten. The copy preserves country snapshots, WHO life-expectancy rows, World Bank country/source/indicator references, and all World Bank observations. It empties `prediction_history`, `nutrition_searches`, `health_data_imports`, and `health_data_import_checkpoints`; application startup can recreate empty operational tables. The builder checks SQLite integrity and verifies row counts.
+
+The current source has 20,312 World Bank observations, 217 countries, 4 indicators, 38 country snapshots, 2,938 WHO rows, and 3 local prediction-history records. The generated seed preserves the public/reference counts and contains zero rows in local/operational history tables. The generated `backend/deployment/` directory is ignored; never substitute the tracked `backend/healthscope.db` as production data.
+
+Production requires `HEALTHSCOPE_DATABASE_PATH` to name an absolute, existing SQLite file distinct from the local database. A persistent volume can be initialized from the seed once and retained across deploys. Ephemeral storage must be initialized from the packaged seed on each new instance; runtime writes will not survive restarts. No World Bank ingestion is run automatically.

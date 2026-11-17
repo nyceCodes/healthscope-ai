@@ -13,8 +13,11 @@ import type { PredictionHistory } from "../types/PredictionHistory";
 
 export type { LifePredictionRequest, LifePredictionResponse } from "../types/LifePrediction";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim()
+    || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
+
 const API = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
+    baseURL: API_BASE_URL,
     timeout: 12000
 });
 

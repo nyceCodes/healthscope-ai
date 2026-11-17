@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -540,38 +540,40 @@ def risk_assessment(
     "/predict-life-expectancy"
 )
 def predict_life_expectancy(
-    request: LifePredictionRequest,
+    api_request: Request,
+    prediction_request: LifePredictionRequest,
     db: Session = Depends(get_db)
 ):
 
     prediction = (
         MLService
         .predict_life_expectancy(
-            request.adult_mortality,
-            request.bmi,
-            request.gdp,
-            request.schooling,
-            request.population
+            prediction_request.adult_mortality,
+            prediction_request.bmi,
+            prediction_request.gdp,
+            prediction_request.schooling,
+            prediction_request.population
         )
     )
 
-    PredictionHistoryService.save_prediction(
+    if getattr(api_request.app.state, "prediction_history_enabled", False):
+        PredictionHistoryService.save_prediction(
 
-        db,
+            db,
 
-        request.adult_mortality,
+            prediction_request.adult_mortality,
 
-        request.bmi,
+            prediction_request.bmi,
 
-        request.gdp,
+            prediction_request.gdp,
 
-        request.schooling,
+            prediction_request.schooling,
 
-        request.population,
+            prediction_request.population,
 
-        prediction
+            prediction
 
-    )
+        )
 
     return {
         "predicted_life_expectancy":
@@ -582,8 +584,14 @@ def predict_life_expectancy(
     "/predictions"
 )
 def prediction_history(
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    if not getattr(request.app.state, "prediction_history_enabled", False):
+        raise HTTPException(
+            status_code=404,
+            detail="Prediction history is not available",
+        )
 
     predictions = (
         PredictionHistoryService

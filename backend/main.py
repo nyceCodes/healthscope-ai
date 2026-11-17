@@ -1,10 +1,14 @@
+import os
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
+from sqlalchemy import text
 
-from app.config import get_cors_settings
+from app.config import get_cors_settings, get_prediction_history_enabled
 from app.api.error_handlers import request_validation_error_response
 from app.database.database import Base
 from app.database.database import engine
+from app.database.database import assert_no_prediction_history
 from fastapi.exceptions import RequestValidationError
 
 from app.models.country_snapshot import CountrySnapshot
@@ -26,12 +30,17 @@ from app.models.health_indicator import (
 )
 
 cors_origins, cors_origin_regex = get_cors_settings()
+prediction_history_enabled = get_prediction_history_enabled()
+if os.getenv("HEALTHSCOPE_ENV", "development").strip().lower() == "production":
+    assert_no_prediction_history(engine)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="HealthScope AI",
-    version="1.0.0"
+    version="1.0.0",
+    debug=False,
 )
+app.state.prediction_history_enabled = prediction_history_enabled
 app.add_exception_handler(
     RequestValidationError,
     request_validation_error_response,
@@ -51,6 +60,14 @@ def root():
     return {
         "message": "HealthScope AI API Running"
     }
+
+
+@app.get("/health", tags=["System"])
+def health_check():
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    return {"status": "ok"}
+
 
 from app.api.health_profile_routes import (
     router as health_profile_router

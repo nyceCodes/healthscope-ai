@@ -83,4 +83,7 @@ All statistics derive from SQL-stored observations and are deterministic. Do not
 - Configure production CORS with explicit trusted origins; development localhost allowances are not used in production.
 - Keep real credentials out of Git and document the required frontend API URL.
 - Provide keyboard navigation, skip navigation, focus visibility, labeled inputs, announced loading/errors/results, and responsive form layout.
-- Prediction history remains shared and unauthenticated in the current architecture; public use requires authentication or a deliberate alternative history policy.
+- Anonymous life-expectancy predictions remain available in production, but production never saves prediction inputs or serves shared history. Local development history remains enabled by default and can be disabled with `HEALTHSCOPE_PREDICTION_HISTORY_ENABLED=false`; existing local records are not deleted. Use a production database without local prediction-history records.
+- Prepare, but do not deploy, the frontend as a Vercel static Vite app and the API as a separate FastAPI service. Production requires an explicit frontend API URL, trusted CORS origins, and a sanitized, separately configured SQLite seed.
+- The production seed must retain all stored World Bank observations and public reference tables while excluding local prediction history and user/operational records. The tracked local database remains unchanged.
+- Expose a lightweight database-backed `/health` endpoint for provider health checks. Do not require World Bank API access during application startup.

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: healthscope-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: cp deployment/healthscope.db "$HEALTHSCOPE_DATABASE_PATH" && exec uvicorn main:app --host 0.0.0.0 --port "$PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: HEALTHSCOPE_ENV
+        value: production
+      - key: HEALTHSCOPE_CORS_ORIGINS
+        sync: false
+      - key: HEALTHSCOPE_PREDICTION_HISTORY_ENABLED
+        value: "false"
+      - key: HEALTHSCOPE_DATABASE_PATH
+        value: /tmp/healthscope.db

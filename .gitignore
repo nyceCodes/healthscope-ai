@@ -13,3 +13,10 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 
+# Local development database
+backend/healthscope.db
+
+# Packaged sanitized production database
+backend/deployment/*
+!backend/deployment/healthscope.db
+

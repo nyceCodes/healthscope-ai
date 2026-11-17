@@ -70,13 +70,13 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Tests mock external APIs and use temporary in-memory SQLite databases to avoid changing saved records. Backend coverage includes validation, pagination, missing observations, ISO-3 normalization, idempotent persistence, error history, and API responses. The frontend interaction test covers indicator switching, reporting-year filtering, map country selection, and missing-data labeling. Run both suites with the commands above; run the frontend lint and production build with `npm run lint` and `npm run build`.
+Tests mock external APIs and use temporary in-memory SQLite databases to avoid changing saved records. Backend coverage includes validation, pagination, missing observations, ISO-3 normalization, idempotent persistence, error history, deployment seeding, and API responses. The frontend interaction test covers indicator switching, reporting-year filtering, map country selection, and missing-data labeling. Run both suites with the commands above; run the frontend lint and production build with `npm run lint` and `npm run build`.
 
-From `frontend/`, run `npm run test`, `npm run lint`, and `npm run build` to validate the map interactions, lint rules, TypeScript, and production bundle.
+From `frontend/`, run `npm run test` and `npm run lint`. Production builds require the API URL; in PowerShell, set `$env:VITE_API_BASE_URL = "https://api.example.test"` before `npm run build`. The build checks that the variable is present, then validates TypeScript and creates the production bundle.
 
 ## Key endpoints
 
-`GET /health/profile/{country}` · `GET /health/history/{country}` · `GET /health/rankings` · `GET /health/trends/{country}` · `GET /health/country-report/{country}` · `GET /health/risk-assessment/{country}` · `GET /health/life-expectancy/{country}` · `POST /health/predict-life-expectancy` · `GET /health/predictions`.
+`GET /health` · `GET /health/profile/{country}` · `GET /health/history/{country}` · `GET /health/rankings` · `GET /health/trends/{country}` · `GET /health/country-report/{country}` · `GET /health/risk-assessment/{country}` · `GET /health/life-expectancy/{country}` · `POST /health/predict-life-expectancy` · `GET /health/predictions` (local development only).
 
 ## Phase 2: World Bank health indicators
 
@@ -159,7 +159,7 @@ npm run build
 
 The **Predictive analytics** route is available from the dashboard navigation and can be opened directly at `/predictive-analytics`. It uses the retained `RandomForestRegressor` (100 trees, `random_state=42`) with the five original features: adult-mortality probability per 1,000 population between ages 15 and 60, average BMI (kg/m²), GDP per capita (US dollars), schooling (years), and population (people). Inputs must be finite and non-negative; BMI and population must be positive. The result is an experimental historical estimate, not a future-year or individual clinical forecast.
 
-The training script prints a holdout MAE but the saved artifact contains no evaluation report. The source training file is not bundled, and the retained database has no BMI values, so MAE, RMSE, and R² cannot be reproduced from the checked-in data. The UI intentionally shows no performance score. Prediction history is stored in the shared SQLite database and is not user-authenticated; do not enter identifying information, and add authentication or disable shared history before exposing the API to public users.
+The training script prints a holdout MAE but the saved artifact contains no evaluation report. The source training file is not bundled, and the retained database has no BMI values, so MAE, RMSE, and R² cannot be reproduced from the checked-in data. The UI intentionally shows no performance score. Anonymous predictions remain available in all environments. Prediction history is enabled by default for local development; set `HEALTHSCOPE_PREDICTION_HISTORY_ENABLED=false` to disable it. Production always disables history reads and does not save anonymous prediction inputs, even if the history setting is `true`. Existing local history rows are not deleted, but must not be included in production database data.
 
 Frontend route modules and visualization components load on demand. The production entry JavaScript decreased from 641.83 kB (194.98 kB gzip) to 231.19 kB (74.24 kB gzip); the largest deferred chart chunk is 341.95 kB (101.19 kB gzip). No dependencies were added. These numbers measure generated JavaScript chunks, not a guarantee of total transfer size for every route.
 
@@ -168,9 +168,38 @@ For production, configure the API before starting it:
 ```powershell
 $env:HEALTHSCOPE_ENV = "production"
 $env:HEALTHSCOPE_CORS_ORIGINS = "https://healthscope.example"
+$env:HEALTHSCOPE_PREDICTION_HISTORY_ENABLED = "false"
+$env:HEALTHSCOPE_DATABASE_PATH = "/var/data/healthscope.db"
 ```
 
-Production startup requires explicit trusted HTTP(S) origins and does not enable the development localhost-port regex. Set `VITE_API_BASE_URL` when building the frontend for a non-local API. CORS is a browser access policy, not authentication. The repository has no tracked `.env` files; keep real keys in ignored local environment files. The npm production dependency audit reported no advisories at the time of this Phase 4 check; a Python vulnerability scanner is not installed in the current environment.
+Production startup requires explicit trusted HTTP(S) origins and an absolute initialized database path distinct from the local development database. It refuses to start if the configured database contains prediction-history rows. It does not enable the development localhost-origin regex. Production forces prediction history off regardless of its setting. CORS is a browser access policy, not authentication.
+
+The root `backend/.env.example` contains local defaults and commented production settings. `frontend/.env.example` documents `VITE_API_BASE_URL`; Vite embeds this value into the public frontend bundle, so it is configuration, not a secret. Do not put credentials in any `VITE_` variable.
+
+### Public SQLite seed
+
+`backend/healthscope.db` is the ignored local development database and is never required for deployment. The packaged `backend/deployment/healthscope.db` is the sanitized, 3.4 MB production seed. It preserves 20,312 World Bank observations across all four indicators, all 217 country references, 2,938 WHO life-expectancy rows, and 38 country snapshots. It contains no prediction history, nutrition searches, or import-operation logs.
+
+To regenerate the seed locally from the local database, run from `backend/`:
+
+```sh
+python -m scripts.create_production_seed --source healthscope.db --output deployment/healthscope.db
+```
+
+The builder opens the source read-only, writes atomically to the separate output, verifies SQLite integrity and row counts, and does not change the local database. The source database is excluded from Git; cloud build and startup do not run this builder and do not depend on the local database or live external APIs.
+
+Production startup requires `HEALTHSCOPE_DATABASE_PATH` to be an absolute writable path distinct from the local database. The configured database is initialized by copying the packaged seed before starting the application. Runtime prediction history is disabled in production, and startup fails closed if any prediction-history records are present. On ephemeral storage, copying the seed at each service start restores the reference observations; other runtime SQLite changes are intentionally not persistent.
+
+### Hosting preparation (not deployed)
+
+- **Frontend — Vercel:** Set the project root to `frontend`, build with `npm run build`, and use `dist` as the output directory. Set `VITE_API_BASE_URL` to the HTTPS FastAPI origin in the Vercel Production environment (and a separate API origin for previews if used). [`frontend/vercel.json`](./frontend/vercel.json) provides the documented SPA rewrite so `/predictive-analytics` and refreshes serve `index.html`. The Vercel Hobby plan is currently listed at $0/month for personal projects, subject to its quotas and terms ([pricing](https://vercel.com/pricing), [Vite SPA routing](https://vercel.com/docs/frameworks/frontend/vite)).
+- **Backend — Railway:** Railway currently offers a Hobby plan at $5/month with $5 of included usage, then resource-based billing. Hobby volumes support up to 5 GB; volume storage is metered separately. Use one service replica with SQLite on the mounted volume. The Free plan has only $1/month of included usage and a 0.5 GB volume limit, so it is suitable for experiments, not dependable public availability ([pricing](https://railway.com/pricing), [volume limits](https://docs.railway.com/reference/volumes), [Python version selection](https://railpack.com/languages/python)).
+- **Backend — Render Free:** [`render.yaml`](./render.yaml) configures the backend root, pinned Python version, free web service, `/health` check, seed initialization, and binding to the provider's `PORT`. Set `HEALTHSCOPE_CORS_ORIGINS` to the exact HTTPS frontend origin when creating the service. The service uses `/tmp/healthscope.db` (ephemeral); startup recopies the packaged seed, predictions remain anonymous, and database changes do not persist. Render Free services spin down after 15 minutes idle and cannot attach persistent disks, so expect cold starts and do not use this option when durable writes or continuous availability are required ([limitations](https://render.com/docs/free), [persistent disks](https://render.com/docs/disks)).
+- **Railway backend:** Set the root directory to `backend`; build with `pip install -r requirements.txt`. Set `HEALTHSCOPE_DATABASE_PATH=/data/healthscope.db`, attach a volume at `/data`, and set the start command to `cp deployment/healthscope.db "$HEALTHSCOPE_DATABASE_PATH" && exec uvicorn main:app --host 0.0.0.0 --port "$PORT"`. Configure the production environment variables above. `backend/.python-version` pins the tested Python runtime.
+
+Hosting prices and plan limits can change. No hosting resources have been created and no deployment has been performed.
+
+The FastAPI process binds to `0.0.0.0` and the provider's `PORT`. `GET /health` runs a lightweight SQLite `SELECT 1` for platform health checks. Production startup does not fetch World Bank data; it serves the initialized local seed. The retained model loads by a path relative to `backend/app/services/ml_service.py`. Production `debug` is explicitly off, so unhandled errors return generic server responses rather than tracebacks. Python production dependencies are exact pins in `backend/requirements.txt`, and `backend/.python-version` selects the tested Python version.
 
 Prediction requests reject invalid numeric values with a sanitized 422 response that omits submitted values. The prediction page has programmatically labeled inputs, loading/error/success states, keyboard focus styling, a skip link, and mobile layouts. No database schema change or dependency was needed.
 
@@ -178,7 +207,9 @@ Prediction requests reject invalid numeric values with a sanitized 422 response 
 
 - `backend/app/api`: FastAPI routes.
 - `backend/app/services`: health profile aggregation, analytics, comparisons, predictions, rankings, snapshots.
-- `backend/healthscope.db`: original SQLite data.
+- `backend/healthscope.db`: local development SQLite data; ignored by Git.
+- `backend/deployment/healthscope.db`: committed sanitized production seed.
+- `backend/scripts/create_production_seed.py`: creates a sanitized, separate deployment database.
 - `backend/saved_models`: original trained scikit-learn model.
 - `frontend/src`: React routes, dashboard, predictive analytics, API client, types and charts.
 - `docs/`: existing project planning and development documentation.

@@ -40,8 +40,12 @@
 - Describe the output as an experimental historical population-level estimate, not clinical advice, causation, or a validated individual forecast.
 - Do not echo submitted values in validation error responses or silently convert prediction/history failures into success.
 - Configure production CORS through explicit trusted HTTP(S) origins. Development localhost patterns must not be enabled in production. CORS is not authentication.
-- Prediction history is shared by the unauthenticated API. Do not collect identifying information; require user authentication or disable shared history before public deployment.
+- Keep shared prediction history disabled in production. Anonymous prediction requests may return results but must not persist inputs; history reads must not reveal existing rows. Local history remains enabled by default, can be disabled with `HEALTHSCOPE_PREDICTION_HISTORY_ENABLED=false`, and must not be deleted as part of this policy. Do not package local prediction-history records as production data.
 - Use route-level and visualization lazy loading based on measured build output; do not increase the warning threshold to hide large chunks.
 - Add indexes, caching, or infrastructure only when query or runtime measurements justify them. Keep existing SQLite rows unchanged unless an explicit data migration is reviewed.
 - Normalize source CSV headers before loading features so whitespace differences do not silently remove model inputs. Do not rerun an append-only legacy loader against the existing database without a separately planned deduplication/reconciliation.
 - Keep environment files and credentials ignored by Git; do not commit local databases, model inputs, or secrets unintentionally.
+- Keep production API origins explicit in `HEALTHSCOPE_CORS_ORIGINS`; `VITE_API_BASE_URL` is public build-time configuration, never a secret. Do not allow localhost origins or use localhost API URLs in production bundles.
+- Keep the tracked SQLite database as local source data. Build a separate production seed using `scripts.create_production_seed`; open the source read-only, preserve public observations, and exclude prediction, nutrition-search, and import-operation records.
+- Require a separate absolute `HEALTHSCOPE_DATABASE_PATH` for production and fail startup if it contains local history. Initialize an ephemeral database from the sanitized seed, or copy that seed once to persistent storage. Do not overwrite or delete the original local database.
+- Pin the tested Python runtime and install backend production dependencies from the exact pins in `requirements.txt`. Keep platform startup bound to `0.0.0.0` and the provider's `PORT`; use `/health` for database readiness.
