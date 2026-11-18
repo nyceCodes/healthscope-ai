@@ -22,6 +22,7 @@ from app.schemas.health_indicator import (
     HealthIndicatorRead,
     HealthObservationRead,
 )
+from app.services.observation_service import decode_dimensions
 
 
 def _country_read(country: HealthCountry) -> HealthCountryRead:
@@ -40,6 +41,11 @@ def _indicator_read(
         unit=indicator.unit,
         source=source_name,
         latest_year=latest_year,
+        publisher=indicator.publisher,
+        definition_url=indicator.definition_url,
+        dataset_code=indicator.dataset_code,
+        dataset_name=indicator.dataset_name,
+        dataset_version=indicator.dataset_version,
     )
 
 
@@ -56,6 +62,16 @@ def _observation_read(
         unit=observation.unit,
         source=observation.source.name,
         imported_at=observation.imported_at,
+        source_reference=observation.source_reference,
+        source_publication_date=observation.source_publication_date,
+        source_record_timestamp=observation.source_record_timestamp,
+        source_value_text=observation.source_value_text,
+        denominator_value=observation.denominator_value,
+        denominator_definition=observation.denominator_definition,
+        dimensions=decode_dimensions(observation.dimensions_json),
+        uncertainty_lower=observation.uncertainty_lower,
+        uncertainty_upper=observation.uncertainty_upper,
+        estimate_status=observation.estimate_status,
     )
 
 

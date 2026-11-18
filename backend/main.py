@@ -9,6 +9,7 @@ from app.api.error_handlers import request_validation_error_response
 from app.database.database import Base
 from app.database.database import engine
 from app.database.database import assert_no_prediction_history
+from app.database.database import ensure_health_data_schema
 from fastapi.exceptions import RequestValidationError
 
 from app.models.country_snapshot import CountrySnapshot
@@ -34,6 +35,7 @@ prediction_history_enabled = get_prediction_history_enabled()
 if os.getenv("HEALTHSCOPE_ENV", "development").strip().lower() == "production":
     assert_no_prediction_history(engine)
 Base.metadata.create_all(bind=engine)
+ensure_health_data_schema(engine)
 
 app = FastAPI(
     title="HealthScope AI",

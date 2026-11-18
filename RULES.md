@@ -2,16 +2,22 @@
 
 ## Data integrity
 
-- Use World Bank Indicators API v2 or official downloaded WDI CSV/ZIP files as the source for Phase 2 observations; do not generate or substitute production measurements.
+- Use World Bank Indicators API v2, official WDI CSV/ZIP files, or the allowlisted WHO GHO OData adapter as the source for stored global observations; do not generate or substitute production measurements.
 - Require a valid three-letter ISO-3 country code and a four-digit reporting year.
 - Store finite, non-negative numeric values only. Keep null source values absent and expose missingness as “No data”.
-- Keep indicator code, unit, source, reporting year, and import timestamp with every observation.
-- Enforce one observation per country, indicator, and year. Refresh using upsert, not append-only duplicates.
+- Keep indicator code/definition/unit, source/publisher, reporting year, source reference, local import time, and provider timestamps/dimensions/uncertainty when the provider supplies them. A provider row timestamp is not a publication date.
+- Enforce one observation per country, indicator, and year. Refresh using upsert, not append-only duplicates. The current WHO allowlist uses one canonical dimension selection per indicator code; do not load additional strata under that unique key.
+- Record the previous value and provenance before applying a changed observation. Identical value/provenance refreshes must not create spurious revision records.
+- Preserve source nulls as missing. Do not infer publication dates, dataset versions, numeric denominators, or an annual reporting obligation when the provider does not supply evidence for them.
 - Exclude World Bank aggregate regions from country-level records.
 - Preserve existing SQLite rows and tables. Schema changes must be additive unless an explicitly reviewed migration is supplied.
-- Log provider, parsing, and persistence failures and retain import status. Do not silently report successful ingestion after a failed request.
+- Log provider, parsing, and persistence failures and retain import status, including duplicate counts. Do not silently report successful ingestion after a failed request.
 - Stream downloaded archives and validate their headers and reporting-year columns before importing; accept both standard WDI and filtered DataBank export headers. Local fallback must use the same validation, country normalization, source attribution, and unique-key upserts as API ingestion.
 - Keep API ingestion sequential and bounded. Persist a checkpoint only in the same commit as its observation page, and resume only pages recorded as complete.
+- Keep WHO ingestion on the explicit CLI/build path; never call WDI or WHO services during normal dashboard/API reads.
+- Restrict WHO GHO ingestion to the six reviewed codes and their exact country/dimension selections. Require provider indicator metadata to match the allowlisted definition and reject non-country aggregates, unsupported units, invalid periods, and ambiguous conflicting duplicates.
+- Resolve WHO country codes through the official country metadata endpoint when they are absent from WDI's country catalog; reject unresolved country rows rather than inventing names or mapping aggregates as countries.
+- Report observed country/indicator years and gaps without implying that all indicators are expected annually. Source cadence differs; skilled birth-attendance observations are irregular.
 
 ## API and presentation
 
@@ -36,7 +42,7 @@
 
 - Preserve the existing saved life-expectancy estimator and its exact five-feature order: adult mortality, BMI, GDP, schooling, and population.
 - Require finite values; adult mortality, GDP, and schooling must be non-negative, and BMI and population must be positive. Apply validation in both the Pydantic request model and frontend form.
-- Never publish MAE, RMSE, R², or other model metrics unless they are reproducible against the actual saved estimator and matching holdout data. No BMI values exist in the retained WHO table, so evaluation cannot be reconstructed from that table.
+- Never publish MAE, RMSE, R², or other model metrics unless they are reproducible against the actual saved estimator and matching holdout data. No BMI values exist in the retained KaggleHub WHO-labelled table, so evaluation cannot be reconstructed from that table.
 - Describe the output as an experimental historical population-level estimate, not clinical advice, causation, or a validated individual forecast.
 - Do not echo submitted values in validation error responses or silently convert prediction/history failures into success.
 - Configure production CORS through explicit trusted HTTP(S) origins. Development localhost patterns must not be enabled in production. CORS is not authentication.
@@ -46,6 +52,21 @@
 - Normalize source CSV headers before loading features so whitespace differences do not silently remove model inputs. Do not rerun an append-only legacy loader against the existing database without a separately planned deduplication/reconciliation.
 - Keep environment files and credentials ignored by Git; do not commit local databases, model inputs, or secrets unintentionally.
 - Keep production API origins explicit in `HEALTHSCOPE_CORS_ORIGINS`; `VITE_API_BASE_URL` is public build-time configuration, never a secret. Do not allow localhost origins or use localhost API URLs in production bundles.
-- Keep the tracked SQLite database as local source data. Build a separate production seed using `scripts.create_production_seed`; open the source read-only, preserve public observations, and exclude prediction, nutrition-search, and import-operation records.
+- Keep the repository-local SQLite database as local source data. It is Git-ignored, not tracked. Build a separate production seed using `scripts.create_production_seed`; open the source read-only, preserve public observations, and exclude prediction, nutrition-search, and import-operation records.
 - Require a separate absolute `HEALTHSCOPE_DATABASE_PATH` for production and fail startup if it contains local history. Initialize an ephemeral database from the sanitized seed, or copy that seed once to persistent storage. Do not overwrite or delete the original local database.
 - Pin the tested Python runtime and install backend production dependencies from the exact pins in `requirements.txt`. Keep platform startup bound to `0.0.0.0` and the provider's `PORT`; use `/health` for database readiness.
+
+## Task 1 product, public-health, and provenance rules
+
+- Treat country/economy-year aggregates as ecological descriptions, not patient-level evidence. Never infer individual risk, population subgroup effects, causality, or intervention effectiveness from descriptive comparisons alone.
+- State the actual observation/reporting year for every indicator. Import/retrieval timestamps are not observation dates. Do not call provider values “live” unless the provider's actual measurement period and freshness support that label.
+- Preserve missingness. Legacy profile serialization currently defaults some absent counts/ratios to zero; do not use that pattern in new indicator or profile data. Do not calculate a rate if its denominator is absent, invalid, or not aligned to the numerator's population/time.
+- Name rate denominators and definitions. Distinguish death counts from mortality rates, reported-death/reported-case ratios from population mortality, tests from persons tested, percentages from percentage-point differences, modeled estimates from direct observations, and a composite index from a validated measure.
+- Do not publish arbitrary categorical risk levels, “healthiest/winner” rankings, unsupported recommendations, or causal/explanatory claims. The existing COVID-derived health index/risk workflow is experimental and must not be presented as professional or clinical intelligence without a defensible method, validation, and appropriate expert review.
+- Describe the present global data as country-year level. Do not claim age, sex, disease-subpopulation, or individual coverage where the observation has no such dimension. The neonatal WHO series is limited to both sexes and 0–27 days and carries those dimension codes; the other imported WHO series are not disaggregated.
+- Link each professional indicator to the official metadata/source endpoint and publisher where available. Cite distribution source separately from the original producing organization; retain version/release and licensing/attribution requirements before redistributing data. A null dataset version/publication date means the provider did not supply it, not that it is current.
+- Treat discovery of an indicator code as metadata evidence only. Before import, profile real observation rows for country/year coverage, gaps, units, value ranges, source releases and comparability. Do not describe candidate series as globally complete or consistently annual without that profile.
+- Do not merge duplicate WDI and direct-WHO representations into one time series unless definitions, geography, population, units, source vintage and revisions are reconciled and documented.
+- Keep public reference links informational. Do not present general reference material or aggregate indicators as patient-specific clinical recommendations. The predictive feature remains experimental and separate from any professional workflow.
+- Keep local model inputs/history out of public releases. The inspected local database has three prediction-history entries; its generated seed has none. Do not infer that absence of patient identifiers makes user-entered prediction inputs suitable for publication.
+- Task 2 implements a bounded WHO GHO adapter for six reviewed indicators; no further source integrations or dependencies are implied. Additional sources or arbitrary WHO dimensions require official-source verification, data-quality evidence, focused tests, and a reviewed additive migration plan.

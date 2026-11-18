@@ -73,25 +73,37 @@ def test_packaged_production_seed_is_complete_and_sanitized():
         assert seed_db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert seed_db.execute(
             "SELECT COUNT(*) FROM health_indicator_observations"
-        ).fetchone()[0] == 20_312
+        ).fetchone()[0] == 47_303
         assert seed_db.execute(
             "SELECT COUNT(*) FROM health_indicators"
-        ).fetchone()[0] == 4
+        ).fetchone()[0] == 10
         assert {
             row[0]
             for row in seed_db.execute("SELECT code FROM health_indicators")
         } == {
+            "MDG_0000000020",
+            "MDG_0000000025",
+            "MDG_0000000026",
             "SH.DYN.MORT",
             "SH.XPD.CHEX.GD.ZS",
             "SP.DYN.LE00.IN",
             "SP.POP.TOTL",
+            "UHC_INDEX_REPORTED",
+            "WHOSIS_000003",
+            "WHS4_100",
         }
         assert seed_db.execute(
             "SELECT COUNT(*) FROM health_countries"
-        ).fetchone()[0] == 217
+        ).fetchone()[0] == 221
         assert seed_db.execute(
             "SELECT COUNT(*) FROM health_data_sources"
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 2
+        assert seed_db.execute(
+            "SELECT COUNT(*) FROM health_data_imports"
+        ).fetchone()[0] == 0
+        assert seed_db.execute(
+            "SELECT COUNT(*) FROM prediction_history"
+        ).fetchone()[0] == 0
         assert seed_db.execute(
             "SELECT COUNT(*) FROM country_snapshots"
         ).fetchone()[0] == 38

@@ -13,6 +13,11 @@ export interface HealthIndicator {
     unit: string;
     source: string;
     latest_year: number | null;
+    publisher?: string | null;
+    definition_url?: string | null;
+    dataset_code?: string | null;
+    dataset_name?: string | null;
+    dataset_version?: string | null;
 }
 
 export interface HealthObservation {
@@ -25,6 +30,28 @@ export interface HealthObservation {
     unit: string;
     source: string;
     imported_at: string;
+    source_reference?: string | null;
+    source_publication_date?: string | null;
+    source_record_timestamp?: string | null;
+    source_value_text?: string | null;
+    denominator_value?: number | null;
+    denominator_definition?: string | null;
+    dimensions?: Record<string, string> | null;
+    uncertainty_lower?: number | null;
+    uncertainty_upper?: number | null;
+    estimate_status?: string | null;
+}
+
+export interface HealthDataCoverage {
+    indicator_code: string;
+    country_iso3: string;
+    country_name: string;
+    observation_count: number;
+    first_year: number;
+    last_year: number;
+    observed_years: number[];
+    unobserved_years_within_span: number[];
+    cadence_note: string;
 }
 
 export interface HealthObservationSet {

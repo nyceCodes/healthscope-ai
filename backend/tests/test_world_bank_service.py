@@ -13,6 +13,7 @@ from app.models.health_indicator import (
     HealthDataImport,
     HealthDataImportCheckpoint,
     HealthIndicatorObservation,
+    HealthIndicatorObservationRevision,
 )
 from app.services.world_bank_service import (
     WorldBankClient,
@@ -122,6 +123,9 @@ def test_indicator_ingestion_is_repeatable_and_keeps_nulls_missing(db):
             HealthIndicatorObservation.year == 2021
         )
     ) is None
+    assert db.scalar(
+        select(func.count()).select_from(HealthIndicatorObservationRevision)
+    ) == 0
 
 
 def test_indicator_reimport_updates_changed_values(db):
@@ -138,6 +142,8 @@ def test_indicator_reimport_updates_changed_values(db):
     assert result.rows_inserted == 0
     assert db.scalar(select(HealthIndicatorObservation.value)) == 73.0
     assert db.scalar(select(func.count()).select_from(HealthIndicatorObservation)) == 2
+    revision = db.scalar(select(HealthIndicatorObservationRevision))
+    assert revision.previous_value == 71.2
 
 
 def test_world_bank_request_failures_are_reported_and_recorded(db, caplog):

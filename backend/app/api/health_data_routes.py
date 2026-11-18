@@ -13,6 +13,7 @@ from app.models.health_indicator import (
 from app.schemas.health_indicator import (
     HealthCountryObservationSet,
     HealthCountryRead,
+    HealthDataCoverageRead,
     HealthIndicatorRead,
     HealthObservationRead,
     HealthObservationSet,
@@ -27,6 +28,9 @@ from app.services.global_analytics_service import (
     build_indicator_ranking,
     build_trend_analysis,
 )
+from app.services.coverage_service import build_data_coverage
+from app.services.observation_service import decode_dimensions
+from app.utils.country_codes import normalize_iso3
 
 router = APIRouter()
 
@@ -51,6 +55,11 @@ def _indicator_response(db: Session, indicator: HealthIndicator) -> HealthIndica
         unit=indicator.unit,
         source=source.name,
         latest_year=latest_year,
+        publisher=indicator.publisher,
+        definition_url=indicator.definition_url,
+        dataset_code=indicator.dataset_code,
+        dataset_name=indicator.dataset_name,
+        dataset_version=indicator.dataset_version,
     )
 
 
@@ -67,6 +76,16 @@ def _observation_response(
         unit=observation.unit,
         source=observation.source.name,
         imported_at=observation.imported_at,
+        source_reference=observation.source_reference,
+        source_publication_date=observation.source_publication_date,
+        source_record_timestamp=observation.source_record_timestamp,
+        source_value_text=observation.source_value_text,
+        denominator_value=observation.denominator_value,
+        denominator_definition=observation.denominator_definition,
+        dimensions=decode_dimensions(observation.dimensions_json),
+        uncertainty_lower=observation.uncertainty_lower,
+        uncertainty_upper=observation.uncertainty_upper,
+        estimate_status=observation.estimate_status,
     )
 
 
@@ -216,6 +235,24 @@ def country_indicator_history(
     return [
         _observation_response(observation) for observation in observations
     ]
+
+
+@router.get("/coverage", response_model=list[HealthDataCoverageRead])
+def health_data_coverage(
+    indicator_code: str | None = None,
+    country_iso3: str | None = Query(default=None, min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+) -> list[HealthDataCoverageRead]:
+    if indicator_code is not None:
+        _get_indicator(db, indicator_code)
+    normalized_country = (
+        normalize_iso3(country_iso3) if country_iso3 is not None else None
+    )
+    if country_iso3 is not None and normalized_country is None:
+        raise HTTPException(status_code=422, detail="Country must use an ISO-3 code")
+    if normalized_country is not None and db.get(HealthCountry, normalized_country) is None:
+        raise HTTPException(status_code=404, detail="Country not found")
+    return build_data_coverage(db, indicator_code, normalized_country)
 
 
 def _normalize_analytics_countries(

@@ -40,6 +40,16 @@ function formatValue(value: number, unit: string): string {
     return `${displayNumber(value)} ${unit}`;
 }
 
+function safeExternalUrl(value: string | null | undefined): string | null {
+    if (!value) return null;
+    try {
+        const url = new URL(value);
+        return url.protocol === "https:" ? url.href : null;
+    } catch {
+        return null;
+    }
+}
+
 function formatAbsoluteChange(value: number, indicator: HealthIndicator): string {
     const unit = indicator.code === "SH.XPD.CHEX.GD.ZS"
         ? Math.abs(value) === 1 ? "percentage point" : "percentage points"
@@ -79,7 +89,25 @@ function resolveCountry(value: string, countries: HealthCountry[]): HealthCountr
 function toCsv(rows: HealthObservation[]): string {
     const quote = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
     return [
-        ["country", "iso3", "indicator", "reporting_year", "value", "unit", "source"].map(quote).join(","),
+        [
+            "country",
+            "iso3",
+            "indicator",
+            "reporting_year",
+            "value",
+            "unit",
+            "source",
+            "source_reference",
+            "source_publication_date",
+            "source_record_timestamp",
+            "source_value_text",
+            "denominator_value",
+            "denominator_definition",
+            "uncertainty_lower",
+            "uncertainty_upper",
+            "estimate_status",
+            "dimensions",
+        ].map(quote).join(","),
         ...rows.map((row) => [
             row.country_name,
             row.country_iso3,
@@ -88,6 +116,16 @@ function toCsv(rows: HealthObservation[]): string {
             row.value,
             row.unit,
             row.source,
+            row.source_reference ?? "",
+            row.source_publication_date ?? "",
+            row.source_record_timestamp ?? "",
+            row.source_value_text ?? "",
+            row.denominator_value ?? "",
+            row.denominator_definition ?? "",
+            row.uncertainty_lower ?? "",
+            row.uncertainty_upper ?? "",
+            row.estimate_status ?? "",
+            JSON.stringify(row.dimensions ?? {}),
         ].map(quote).join(",")),
     ].join("\r\n");
 }
@@ -412,7 +450,7 @@ export default function GlobalAnalytics({
         <section className="global-analytics" aria-labelledby="analytics-heading">
             <header className="analytics-header">
                 <h2 id="analytics-heading">Country analytics</h2>
-                <p>Historical World Bank observations with their reported years and source attribution.</p>
+                <p>Stored WDI and WHO GHO observations with reporting years and source attribution.</p>
             </header>
 
             <datalist id="health-countries">
@@ -543,6 +581,21 @@ export default function GlobalAnalytics({
                                                     ? `Reporting year ${observation.year} · ${observation.source}`
                                                     : "No stored observation"}
                                             </small>
+                                            {observation?.source_reference && (
+                                                <small>
+                                                    {safeExternalUrl(observation.source_reference) ? (
+                                                        <a
+                                                            href={safeExternalUrl(observation.source_reference) ?? undefined}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                        >
+                                                            Observation source
+                                                        </a>
+                                                    ) : (
+                                                        `Source note: ${observation.source_reference}`
+                                                    )}
+                                                </small>
+                                            )}
                                         </article>
                                     );
                                 })}
@@ -552,6 +605,18 @@ export default function GlobalAnalytics({
                                     <h3>{indicator.name} historical trend</h3>
                                     <p className="source-note">
                                         Source: {indicator.source}. Each point uses its actual reporting year; missing years are not interpolated.
+                                        {indicator.definition_url && (
+                                            <>
+                                                {" "}
+                                                <a
+                                                    href={indicator.definition_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    Official indicator metadata
+                                                </a>
+                                            </>
+                                        )}
                                     </p>
                                     <div className="chart-frame">
                                         <ResponsiveContainer width="100%" height={300}>

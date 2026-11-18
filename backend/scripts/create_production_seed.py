@@ -112,7 +112,7 @@ def main() -> None:
     args = parser.parse_args()
     report = create_production_seed(args.source, args.output)
     print(
-        f"Created {args.output}; preserved {report['observations']:,} World Bank "
+        f"Created {args.output}; preserved {report['observations']:,} health "
         f"observations and excluded {report['excluded_predictions']:,} prediction "
         "history rows."
     )

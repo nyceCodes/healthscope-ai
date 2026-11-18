@@ -241,6 +241,9 @@ function Dashboard() {
     const selectedIndicator = healthIndicators.find(
         (indicator) => indicator.code === selectedIndicatorCode,
     );
+    const selectedMapObservation = mapObservations.find(
+        (observation) => observation.country_iso3 === selectedMapCountry,
+    );
 
     return (
 
@@ -277,7 +280,7 @@ function Dashboard() {
             <section className="global-health-data" aria-labelledby="global-data-heading">
                 <h2 id="global-data-heading">Global health indicators</h2>
                 <p className="source-note">
-                    World Bank World Development Indicators. These are historical annual observations, not live readings.
+                    Stored country-level observations from World Bank WDI and WHO GHO. Source update periods vary; values are not live readings.
                 </p>
                 <div className="indicator-controls">
                     <label>
@@ -323,10 +326,37 @@ function Dashboard() {
                 {selectedIndicator && selectedYear !== null && (
                     <p className="indicator-definition">
                         {selectedIndicator.definition}
-                        {" "}Source: {selectedIndicator.source}. Reporting year: {selectedYear}.
+                        {" "}Source: {selectedIndicator.source}.
+                        {selectedIndicator.publisher ? ` Publisher: ${selectedIndicator.publisher}.` : ""}
+                        {selectedIndicator.dataset_name ? ` Dataset: ${selectedIndicator.dataset_name}.` : ""}
+                        {" "}Reporting year: {selectedYear}.
                         {selectedIndicator.latest_year !== null && selectedYear < selectedIndicator.latest_year
                             ? ` Historical selection; latest year available is ${selectedIndicator.latest_year}.`
                             : ""}
+                        {selectedIndicator.definition_url && (
+                            <>
+                                {" "}
+                                <a
+                                    href={selectedIndicator.definition_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    Official metadata
+                                </a>
+                            </>
+                        )}
+                        {selectedMapObservation?.source_reference?.startsWith("https://") && (
+                            <>
+                                {" "}
+                                <a
+                                    href={selectedMapObservation.source_reference}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    Selected observation source
+                                </a>
+                            </>
+                        )}
                     </p>
                 )}
                 {catalogError && <p className="api-error" role="alert">{catalogError}</p>}
@@ -335,12 +365,12 @@ function Dashboard() {
                 {mapLoading && <p className="loading-status" role="status">Loading indicator observations…</p>}
                 {!mapLoading && healthIndicators.length === 0 && !mapError && !catalogError && (
                     <p className="empty-data-note">
-                        No indicators are stored yet. Run the documented World Bank import command to load official observations.
+                        No indicators are stored yet. Run the documented source-specific import command to load official observations.
                     </p>
                 )}
                 {!mapLoading && selectedIndicator && indicatorYears.length === 0 && !mapError && !catalogError && (
                     <p className="empty-data-note" role="status">
-                        No observations are stored for {selectedIndicator.name}. Run a World Bank import or refresh before exploring this indicator.
+                        No observations are stored for {selectedIndicator.name}. Run its documented source-specific import or refresh before exploring this indicator.
                     </p>
                 )}
                 {worldMap && selectedIndicator && selectedYear !== null && (

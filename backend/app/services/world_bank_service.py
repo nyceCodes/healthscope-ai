@@ -10,20 +10,22 @@ from typing import Any, Iterator, TextIO
 
 import requests
 from requests.adapters import HTTPAdapter
-from sqlalchemy import delete, func, select, text, tuple_
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 from urllib3.util.retry import Retry
 from urllib3.exceptions import ReadTimeoutError
 
+from app.database.database import ensure_health_data_schema
 from app.models.health_indicator import (
     HealthCountry,
     HealthDataImport,
     HealthDataImportCheckpoint,
     HealthDataSource,
     HealthIndicator,
-    HealthIndicatorObservation,
 )
+from app.services.observation_service import upsert_observation_batch
+from app.utils.country_codes import normalize_iso3
 from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -59,13 +61,21 @@ INDICATOR_METADATA = {
         "Level of current health expenditure expressed as a percentage of GDP. Estimates of current health expenditures include healthcare goods and services consumed during each year. This indicator does not include capital health expenditures such as buildings, machinery, IT and stocks of vaccines for emergency or outbreaks.",
     ),
 }
-
-
-def normalize_iso3(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    code = value.strip().upper()
-    return code if re.fullmatch(r"[A-Z]{3}", code) else None
+INDICATOR_PUBLISHERS = {
+    "SP.DYN.LE00.IN": (
+        "World Bank WDI; source organization varies by country and may include "
+        "UN Population Division, national statistical offices, and Eurostat."
+    ),
+    "SP.POP.TOTL": (
+        "World Bank WDI; source organization varies by country and may include "
+        "UN Population Division, national statistical offices, and Eurostat."
+    ),
+    "SH.DYN.MORT": (
+        "UN Inter-agency Group for Child Mortality Estimation; UNICEF, WHO, "
+        "World Bank, and UN Population Division."
+    ),
+    "SH.XPD.CHEX.GD.ZS": "World Health Organization Global Health Expenditure Database.",
+}
 
 
 def parse_observation(row: dict[str, Any]) -> tuple[str, int, float] | None:
@@ -423,6 +433,7 @@ def _upsert_indicator_metadata(
     code: str,
     name: str,
     definition: str,
+    publisher: str | None = None,
 ) -> None:
     statement = sqlite_insert(HealthIndicator).values(
         code=code,
@@ -430,6 +441,10 @@ def _upsert_indicator_metadata(
         definition=definition.strip(),
         unit=INDICATOR_UNITS[code],
         source_code=WORLD_BANK_SOURCE_CODE,
+        publisher=publisher or INDICATOR_PUBLISHERS[code],
+        definition_url=f"{WORLD_BANK_BASE_URL}/indicator/{code}?format=json",
+        dataset_code="WDI",
+        dataset_name="World Development Indicators",
         updated_at=utc_now(),
     )
     db.execute(
@@ -440,6 +455,10 @@ def _upsert_indicator_metadata(
                 "definition": statement.excluded.definition,
                 "unit": statement.excluded.unit,
                 "source_code": statement.excluded.source_code,
+                "publisher": statement.excluded.publisher,
+                "definition_url": statement.excluded.definition_url,
+                "dataset_code": statement.excluded.dataset_code,
+                "dataset_name": statement.excluded.dataset_name,
                 "updated_at": statement.excluded.updated_at,
             },
         )
@@ -452,54 +471,7 @@ def _upsert_observation_batch(
     observations: dict[tuple[str, int], dict[str, Any]],
     run: HealthDataImport,
 ) -> None:
-    if not observations:
-        return
-    keys = list(observations)
-    existing = _existing_observation_keys(db, code, keys)
-    run.rows_updated += len(existing)
-    run.rows_inserted += len(keys) - len(existing)
-    excluded = sqlite_insert(HealthIndicatorObservation).excluded
-    db.execute(
-        sqlite_insert(HealthIndicatorObservation)
-        .values(list(observations.values()))
-        .on_conflict_do_update(
-            index_elements=[
-                HealthIndicatorObservation.country_iso3,
-                HealthIndicatorObservation.indicator_code,
-                HealthIndicatorObservation.year,
-            ],
-            set_={
-                "value": excluded.value,
-                "unit": excluded.unit,
-                "source_code": excluded.source_code,
-                "imported_at": excluded.imported_at,
-            },
-        )
-    )
-
-
-def _existing_observation_keys(
-    db: Session,
-    code: str,
-    keys: list[tuple[str, int]],
-) -> set[tuple[str, int]]:
-    existing: set[tuple[str, int]] = set()
-    for offset in range(0, len(keys), 400):
-        batch = keys[offset : offset + 400]
-        rows = db.execute(
-            select(
-                HealthIndicatorObservation.country_iso3,
-                HealthIndicatorObservation.year,
-            ).where(
-                HealthIndicatorObservation.indicator_code == code,
-                tuple_(
-                    HealthIndicatorObservation.country_iso3,
-                    HealthIndicatorObservation.year,
-                ).in_(batch),
-            )
-        )
-        existing.update((country, year) for country, year in rows)
-    return existing
+    upsert_observation_batch(db, code, observations, run)
 
 
 def ingest_indicator(
@@ -524,6 +496,7 @@ def ingest_indicator(
     country = normalize_iso3(country_iso3) if country_iso3 is not None else None
     if country_iso3 is not None and country is None:
         raise ValueError(f"Invalid ISO-3 country code: {country_iso3!r}")
+    ensure_health_data_schema(db.get_bind())
     country_key = country or ""
     page_size = COUNTRY_PAGE_SIZE if country else per_page
 
@@ -545,7 +518,18 @@ def ingest_indicator(
         if not isinstance(definition, str) or not definition.strip():
             raise ValueError(f"World Bank definition is missing for indicator {code}")
 
-        _upsert_indicator_metadata(db, code, metadata["name"], definition)
+        source_organization = metadata.get("sourceOrganization")
+        _upsert_indicator_metadata(
+            db,
+            code,
+            metadata["name"],
+            definition,
+            publisher=(
+                source_organization
+                if isinstance(source_organization, str)
+                else None
+            ),
+        )
         run.indicator_code = code
         db.commit()
 
@@ -685,6 +669,13 @@ def ingest_indicator(
                         "unit": INDICATOR_UNITS[code],
                         "source_code": WORLD_BANK_SOURCE_CODE,
                         "imported_at": utc_now(),
+                        "source_reference": (
+                            f"{WORLD_BANK_BASE_URL}/country/{iso3}/indicator/"
+                            f"{code}?format=json"
+                        ),
+                        "source_value_text": str(row.get("value")),
+                        "dimensions_json": "{}",
+                        "estimate_status": "source_method_not_reported_per_observation",
                     }
 
                 _upsert_observation_batch(db, code, observations, run)
@@ -973,6 +964,7 @@ def ingest_world_bank_csv(
     country = normalize_iso3(country_iso3) if country_iso3 is not None else None
     if country_iso3 is not None and country is None:
         raise ValueError(f"Invalid ISO-3 country code: {country_iso3!r}")
+    ensure_health_data_schema(db.get_bind())
     codes = indicator_codes or list(INDICATOR_UNITS)
     unsupported = set(codes).difference(INDICATOR_UNITS)
     if unsupported:
@@ -1045,6 +1037,12 @@ def ingest_world_bank_csv(
                     "unit": INDICATOR_UNITS[code],
                     "source_code": WORLD_BANK_SOURCE_CODE,
                     "imported_at": utc_now(),
+                    "source_reference": (
+                        "https://databank.worldbank.org/source/world-development-indicators"
+                    ),
+                    "source_value_text": str(row.get("value")),
+                    "dimensions_json": "{}",
+                    "estimate_status": "source_method_not_reported_per_observation",
                 }
                 if len(pending) >= 500:
                     _upsert_observation_batch(db, code, pending, run)
